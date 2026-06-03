@@ -87,17 +87,17 @@ The complete side-by-side API table is in [dbutils-to-notebookutils.md](resource
 |---|---|---|
 | `dbutils.fs.ls(path)` | `notebookutils.fs.ls(path)` | **Direct replacement** |
 | `dbutils.fs.cp(src, dest)` | `notebookutils.fs.cp(src, dest)` | **Direct replacement** |
-| `dbutils.fs.mv(src, dest)` | `notebookutils.fs.mv(src, dest)` | **Direct replacement** |
+| `dbutils.fs.mv(src, dest)` | `notebookutils.fs.mv(src, dest, create_path, overwrite=False)` | ⚠️ Signature differs — see [dbutils-to-notebookutils.md](resources/dbutils-to-notebookutils.md) |
 | `dbutils.fs.rm(path, recurse)` | `notebookutils.fs.rm(path, recurse)` | **Direct replacement** |
 | `dbutils.fs.mkdirs(path)` | `notebookutils.fs.mkdirs(path)` | **Direct replacement** |
 | `dbutils.fs.put(path, contents)` | `notebookutils.fs.put(path, contents)` | **Direct replacement** |
-| `dbutils.fs.head(path, maxBytes)` | `notebookutils.fs.head(path, maxBytes)` | **Direct replacement** |
-| `dbutils.fs.mount(...)` | **Not available** — use **OneLake Shortcuts** | Fabric uses token-based access; no FUSE mounts |
+| `dbutils.fs.head(path, maxBytes)` | `notebookutils.fs.head(path, max_bytes)` | ⚠️ Default differs — Python/Scala 100 KB, R 64 KB. See [dbutils-to-notebookutils.md](resources/dbutils-to-notebookutils.md) |
+| `dbutils.fs.mount(...)` | `notebookutils.fs.mount(source, mountPoint, extraConfigs=None)` | ✅ **Supported** — Microsoft Entra (default), `accountKey`, or `sasToken` auth. For cross-workspace / persistent sharing, prefer **OneLake Shortcuts** |
 | `dbutils.secrets.get(scope, key)` | `notebookutils.credentials.getSecret(keyVaultUrl, secretName)` | Scope → Key Vault URL; key → secret name |
 | `dbutils.notebook.run(path, timeout, args)` | `notebookutils.notebook.run(name, timeout, args)` | `path` → notebook `name` (relative to workspace) |
 | `dbutils.notebook.exit(value)` | `notebookutils.notebook.exit(value)` | **Direct replacement** |
 | `dbutils.widgets.get(name)` | See [§ Widgets Migration](#widgets-migration) | No direct equivalent |
-| `dbutils.library.install(...)` | **Not available** — use **Fabric Environments** | Runtime library install not supported |
+| `dbutils.library.install(...)` | **Not available at runtime** — use **Fabric Environments** | `dbutils.library.restartPython()` → `notebookutils.session.restartPython()` |
 | `dbutils.data.summarize(df)` | `display(df.summary())` | Use `display()` or pandas `describe()` |
 
 ### Widgets Migration
@@ -106,10 +106,12 @@ The complete side-by-side API table is in [dbutils-to-notebookutils.md](resource
 
 | Use Case | Fabric Pattern |
 |---|---|
-| Pass parameter from parent notebook | `notebookutils.notebook.run("child", args={"param": "value"})` — read via `notebookutils.runtime.context["parameters"]` |
-| Pipeline-driven parameterization | Mark cell with `parameters` tag in notebook; pipeline injects values via notebook activity |
-| Interactive selection in notebook | Use `display()` with input cells or Fabric Data Activator |
-| Read pipeline-injected value in code | `import notebookutils; params = notebookutils.runtime.context.get("parameters", {})` |
+| Pass parameter from parent notebook | Mark a cell in the child notebook as a **parameters cell** (notebook UI: cell "..." menu → "Mark cell as parameters"). The parent calls `notebookutils.notebook.run("child", arguments={"param": "value"})` — at runtime the engine inserts a new cell beneath the parameters cell that overrides the defaults |
+| Pipeline-driven parameterization | Same parameters-cell mechanism; the Fabric Pipeline notebook activity supplies override values via its **Base parameters** setting |
+| Centralized cross-notebook config | Use `notebookutils.variableLibrary.getLibrary("<name>")` to read values from a Variable Library item (deployment pipelines activate the right value set per stage) |
+| Interactive selection in notebook | Use `display()` with input cells, IPython widgets (Python only), or Fabric Data Activator |
+
+> Note: `notebookutils.runtime.context` does **not** expose parameter values. It's for execution metadata (workspace/notebook/activity/user IDs, pipeline-vs-interactive flags, etc.). See [dbutils-to-notebookutils.md § Runtime Context](resources/dbutils-to-notebookutils.md#runtime-context).
 
 ---
 
@@ -174,10 +176,10 @@ Fabric ML Experiments are built on the MLflow SDK — most code is directly port
 
 ### MUST DO
 - **Replace all `dbutils.*` calls** using the mapping in [dbutils-to-notebookutils.md](resources/dbutils-to-notebookutils.md) — `dbutils` is not available in Fabric notebooks
-- **Replace `dbutils.fs.mount()`** with **OneLake Shortcuts** — Fabric uses token-based identity access; FUSE mounts are not supported
+- **Migrate `dbutils.fs.mount()` to `notebookutils.fs.mount()`** (✅ supported — Microsoft Entra default, or `accountKey` / `sasToken` from Key Vault). For cross-workspace or persistent sharing, prefer **OneLake Shortcuts** instead. Always pair `mount()` with `unmount()` in `try/finally` — Fabric mounts are not released automatically on session end
 - **Replace `dbutils.secrets.get(scope, key)`** with `notebookutils.credentials.getSecret(keyVaultUrl, secretName)` — secret scopes map to Azure Key Vault URLs
-- **Redesign widget-based parameter passing** using notebook parameter cells (tagged `parameters`) or `notebookutils.runtime.context`
-- **Replace `dbutils.library.install()`** with Fabric Environments — runtime library installs are not supported in production workloads
+- **Redesign widget-based parameter passing** using notebook **parameters cells** (cell "..." menu → "Mark cell as parameters"); use `notebookutils.variableLibrary` for centralized cross-notebook config. `notebookutils.runtime.context` does **not** expose parameter values
+- **Replace `dbutils.library.install*()`** with Fabric **Environments** — runtime library installs are not supported in production. `dbutils.library.restartPython()` maps to `notebookutils.session.restartPython()` (Python / PySpark only)
 - **Adapt Unity Catalog 3-level namespaces** (`catalog.schema.table`) to Fabric 2-level (`schema.table` within a Lakehouse) — see [catalog-migration.md](resources/catalog-migration.md)
 - **Map Databricks cluster init scripts** to Fabric Environments — cluster-level library installs must move to Environment items
 

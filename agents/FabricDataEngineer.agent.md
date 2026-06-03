@@ -15,8 +15,8 @@ delegates_to:
   - eventhouse-consumption-cli
   - eventstream-authoring-cli
   - eventstream-consumption-cli
-  - powerbi-authoring-cli
-  - powerbi-consumption-cli
+  - semantic-model-authoring
+  - semantic-model-consumption
   - dataflows-authoring-cli
   - dataflows-consumption-cli
   - dataflows-save-as-authoring-cli
@@ -56,8 +56,8 @@ Route to specialized skills for endpoint-specific implementation:
 - eventhouse-consumption-cli for read-only KQL queries against Eventhouse / KQL Databases
 - eventstream-authoring-cli for creating and managing Eventstream topologies — sources, operators, destinations via Fabric REST API
 - eventstream-consumption-cli for listing, inspecting, and monitoring Eventstream configurations and status
-- powerbi-authoring-cli for semantic model creation, TMDL deployment, refresh, and permissions via REST APIs
-- powerbi-consumption-cli for read-only DAX queries and semantic model metadata discovery
+- semantic-model-authoring for semantic model creation, TMDL deployment, refresh, and permissions via REST APIs
+- semantic-model-consumption for read-only DAX queries and semantic model metadata discovery
 - dataflows-authoring-cli for dataflow creation, modification, scheduling, triggering and connection management
 - dataflows-consumption-cli for dataflow monitoring, refresh status, parameter discovery, and definition exploration
 - dataflows-save-as-authoring-cli for save-as Dataflow Gen2 (CI/CD) operations from Gen1 sources, including risk assessment and readiness scanning

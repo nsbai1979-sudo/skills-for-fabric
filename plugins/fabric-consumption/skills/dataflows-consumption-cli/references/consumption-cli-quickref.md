@@ -48,8 +48,10 @@ $AZ --method get --url "$API/workspaces/$WS_ID/dataflows/$DF_ID/parameters" \
 
 ## Definition Exploration
 
+> **⚠ LRO caveat:** the `getDefinition` one-liners below are happy-path only — they assume a synchronous 200 response. The Fabric API may return **202 + Location** instead (large definitions, server load), in which case the snippet decodes garbage. For production code, use the LRO-aware pattern in [authoring-cli-quickref.md § Validate All Connections in a Dataflow](../../dataflows-authoring-cli/references/authoring-cli-quickref.md#validate-all-connections-in-a-dataflow-pre-refresh-check), or copy the [Fabric LRO Polling Pattern](../../dataflows-authoring-cli/references/authoring-script-templates.md#fabric-lro-polling-pattern) bash branch into your script.
+
 ```bash
-# Get definition (returns base64 parts)
+# Get definition (returns base64 parts; happy-path 200 only — see caveat)
 $AZ --method post --url "$API/workspaces/$WS_ID/dataflows/$DF_ID/getDefinition"
 
 # Decode mashup.pq (Power Query M code)
@@ -69,15 +71,15 @@ $AZ --method post --url "$API/workspaces/$WS_ID/dataflows/$DF_ID/getDefinition" 
 
 ```bash
 # Recent job instances (all)
-$AZ --method get --url "$API/workspaces/$WS_ID/items/$DF_ID/jobs/instances" \
+$AZ --method get --url "$API/workspaces/$WS_ID/dataflows/$DF_ID/jobs/instances" \
   --query "value[].{status:status, type:invokeType, start:startTimeUtc, end:endTimeUtc, error:failureReason}" -o table
 
 # Last job status only
-$AZ --method get --url "$API/workspaces/$WS_ID/items/$DF_ID/jobs/instances" \
+$AZ --method get --url "$API/workspaces/$WS_ID/dataflows/$DF_ID/jobs/instances" \
   --query "value[0].{status:status, start:startTimeUtc, end:endTimeUtc}" -o table
 
 # Failed jobs only
-$AZ --method get --url "$API/workspaces/$WS_ID/items/$DF_ID/jobs/instances" \
+$AZ --method get --url "$API/workspaces/$WS_ID/dataflows/$DF_ID/jobs/instances" \
   --query "value[?status=='Failed'].{id:id, start:startTimeUtc, error:failureReason}" -o table
 
 # Poll a running operation
@@ -110,3 +112,38 @@ $mashup = $response.definition.parts | Where-Object { $_.path -eq "mashup.pq" }
 - **GitHub Copilot CLI**: use `gh copilot suggest -t shell` for `az rest` one-liners; ensure `--resource` in output.
 - **Claude Code / Cowork**: run `az rest` via `bash` tool; follow the Agentic Workflow in [SKILL.md](../SKILL.md); produce scripts using [script-templates.md](script-templates.md).
 - Always verify `az login` session before first REST operation.
+
+
+## Query Execution
+
+```bash
+# Execute a persisted query — send QueryName only (omit customMashupDocument).
+# Raw Apache Arrow IPC stream is written directly to a file via --output-file.
+QUERY_NAME="SalesData"
+$AZ --method post --url "$API/workspaces/$WS_ID/dataflows/$DF_ID/executeQuery" \
+  --body "{\"QueryName\": \"$QUERY_NAME\"}" \
+  --output-file "${QUERY_NAME}.arrow"
+
+# Check for embedded errors on EVERY arrow file before consuming it — executeQuery
+# returns HTTP 200 even when the source query fails; the error JSON is embedded inside
+# the Arrow stream's `PQ Arrow Metadata` block. Feeding a failed stream to pyarrow
+# produces confusing parse errors or silent garbage.
+if grep -q '"Error":"' "${QUERY_NAME}.arrow"; then echo "$QUERY_NAME query failed (see ${QUERY_NAME}.arrow)"; exit 1; fi
+
+# Execute with custom M code (full section document; az rest does NOT auto-wrap a raw `let ... in ...` expression)
+CUSTOM_M='section Section1;
+
+shared Custom = let Source = Table.FromRecords({[id=1, val="A"]}) in Source;'
+jq -n --arg m "$CUSTOM_M" '{QueryName: "Custom", customMashupDocument: $m}' > req.json
+$AZ --method post --url "$API/workspaces/$WS_ID/dataflows/$DF_ID/executeQuery" \
+  --body "@req.json" --output-file Custom.arrow
+
+if grep -q '"Error":"' Custom.arrow; then echo "Custom query failed (see Custom.arrow)"; exit 1; fi
+
+# Convert successful Arrow results to CSV (requires pyarrow + pandas)
+python3 -c "
+import pyarrow as pa
+table = pa.ipc.open_stream(open('${QUERY_NAME}.arrow', 'rb')).read_all()
+print(table.to_pandas().to_csv(index=False))
+"
+```

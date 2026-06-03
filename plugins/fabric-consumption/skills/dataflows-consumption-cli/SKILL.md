@@ -1,15 +1,20 @@
 ---
 name: dataflows-consumption-cli
 description: >
-  Monitor, inspect, and discover Fabric Dataflows Gen2 via read-only CLI operations (az rest / curl).
-  List dataflows across workspaces, decode base64 definitions to inspect Power Query M queries and
-  queryMetadata.json, discover typed parameters with defaults, poll refresh operations for status,
-  retrieve job history with timing and error details, and classify queries by staging settings.
-  Use when the user wants to: (1) list dataflows, (2) inspect a dataflow definition and decode its
-  mashup, (3) discover parameters, (4) check refresh status, (5) retrieve job history,
-  (6) analyze staging settings, (7) examine connections and data source bindings.
-  Triggers: "dataflow status", "refresh history", "dataflow monitor", "list dataflows", "dataflow
-  parameters", "explore dataflow", "inspect dataflow", "dataflow run status".
+  Monitor, inspect, and query saved Fabric Dataflows Gen2 via read-only CLI.
+  List dataflows, decode base64 definitions (mashup.pq, queryMetadata.json,
+  .platform), discover parameters, retrieve refresh status and job history,
+  classify queries by staging, and execute queries against saved dataflows via
+  the read-side `executeQuery` mashup engine (Arrow IPC response). Three
+  executeQuery read modes: (a) execute a persisted query by QueryName,
+  (b) run an ad-hoc read-only customMashupDocument **with no intent to persist**,
+  (c) parse and render Arrow results. For previewing candidate M before
+  persisting via updateDefinition, use `dataflows-authoring-cli`.
+  Triggers: "list dataflows", "inspect dataflow", "decode dataflow definition",
+  "dataflow parameters", "dataflow refresh status", "refresh history",
+  "last refresh status", "dataflow job history", "execute dataflow query",
+  "executeQuery saved query", "executeQuery fetch rows", "ad-hoc dataflow query",
+  "parse Arrow response", "Arrow IPC", "dataflow staging analysis".
 ---
 
 > **Update Check — ONCE PER SESSION (mandatory)**
@@ -23,7 +28,7 @@ description: >
 > 2. To find a dataflow by name: list all dataflows in the workspace and filter by `displayName` client-side — there is no server-side name filter
 > 3. `getDefinition` is a **POST**, not GET — even though it reads data
 
-# Dataflows Gen2 — Consumption via CLI
+# dataflows-consumption-cli — Dataflows Gen2 Consumption via CLI
 
 ## Table of Contents
 
@@ -57,6 +62,7 @@ description: >
 | Tool Stack | [SKILL.md § Tool Stack](#tool-stack) ||
 | Connection | [SKILL.md § Connection](#connection) ||
 | Agentic Exploration ("Chat With My Dataflows") | [SKILL.md § Agentic Exploration](#agentic-exploration-chat-with-my-dataflows) | **Start here** for dataflow exploration |
+| Query Execution | [SKILL.md § Query Evaluation](#query-evaluation) | Execute individual queries; responses are Apache Arrow binary |
 
 ---
 
@@ -142,7 +148,7 @@ echo "$RESPONSE" | jq -r '.definition.parts[] | select(.path=="mashup.pq") | .pa
 
 # 6. Check job history
 az rest --method get --resource "https://api.fabric.microsoft.com" \
-  --url "$API/workspaces/$WS_ID/items/$DF_ID/jobs/instances" \
+  --url "$API/workspaces/$WS_ID/dataflows/$DF_ID/jobs/instances" \
   --query "value[].{status:status, type:invokeType, start:startTimeUtc, end:endTimeUtc, error:failureReason}" -o table
 ```
 
@@ -207,22 +213,31 @@ For full platform gotchas: [DATAFLOWS-CONSUMPTION-CORE.md](../../common/DATAFLOW
 
 ### Example 1: List All Dataflows in a Workspace
 
+**Prompt**: "List all dataflows in this workspace."
+
+**Agent response**:
+
 ```bash
 az rest --method get \
-  --url "https://api.fabric.microsoft.com/v1/workspaces/${WS_ID}/items?type=Dataflow" \
+  --url "https://api.fabric.microsoft.com/v1/workspaces/${WS_ID}/dataflows" \
   --resource "https://api.fabric.microsoft.com" \
   --query "value[].{Name:displayName, Id:id, Type:type}" -o table
 ```
 
 ### Example 2: Decode a Dataflow Definition
 
+**Prompt**: "Show me the Power Query M code inside this dataflow."
+
+**Agent response**:
+
 ```bash
-# Step 1: Request definition (POST — returns 202 with Location header)
-LOCATION=$(az rest --method post \
-  --url "https://api.fabric.microsoft.com/v1/workspaces/${WS_ID}/items/${DF_ID}/getDefinition" \
-  --resource "https://api.fabric.microsoft.com" \
-  --headers "Content-Length=0" \
-  --output none --include-response-headers 2>&1 | grep -i "^location:" | awk '{print $2}' | tr -d '\r')
+# Step 1: Request definition (POST returns 202 with Location header).
+# az rest cannot expose response headers, so capture Location via curl + az-acquired token.
+TOKEN=$(az account get-access-token --resource "https://api.fabric.microsoft.com" --query accessToken -o tsv)
+LOCATION=$(curl -sS -X POST \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Length: 0" \
+  "https://api.fabric.microsoft.com/v1/workspaces/${WS_ID}/dataflows/${DF_ID}/getDefinition" \
+  -o /dev/null -D - | tr -d '\r' | grep -i "^location:" | awk '{print $2}')
 
 # Step 2: Poll until definition is ready
 DEF=$(az rest --method get --url "${LOCATION}" \
@@ -240,15 +255,23 @@ for p in parts:
 
 ### Example 3: Check Refresh Job History
 
+**Prompt**: "Show me the recent refresh history for this dataflow."
+
+**Agent response**:
+
 ```bash
 # Get recent job instances for a dataflow
 az rest --method get \
-  --url "https://api.fabric.microsoft.com/v1/workspaces/${WS_ID}/items/${DF_ID}/jobs/instances?limit=5" \
+  --url "https://api.fabric.microsoft.com/v1/workspaces/${WS_ID}/dataflows/${DF_ID}/jobs/instances?limit=5" \
   --resource "https://api.fabric.microsoft.com" \
   --query "value[].{Status:status, Start:startTimeUtc, End:endTimeUtc, Id:id}" -o table
 ```
 
 ### Example 4: Discover Parameters from Definition
+
+**Prompt**: "What parameters does this dataflow accept?"
+
+**Agent response**:
 
 ```bash
 # After decoding the definition (see Example 2), extract parameters:
@@ -263,3 +286,203 @@ for p in parts:
                 print(f'Parameter: {qname}')
 "
 ```
+
+---
+
+## Query Evaluation
+
+Execute an individual query from a dataflow and inspect results. **Responses are a raw Apache Arrow IPC stream** with `Content-Type: application/vnd.apache.arrow.stream` — **not** a JSON envelope. The first four bytes of a valid stream are the IPC continuation marker `ff ff ff ff`. Parse with `pyarrow.ipc.open_stream()`.
+
+> **Wire format**: `executeQuery` returns the raw Apache Arrow IPC byte stream (`Content-Type: application/vnd.apache.arrow.stream`) — **not JSON**. Don't try to parse it with `jq` — there is no JSON envelope to extract. Use `--output-file` to save the bytes and parse as Arrow (see Examples 5–7).
+
+> **Failures return HTTP 200**: `executeQuery` returns `200 OK` with `application/vnd.apache.arrow.stream` even when the underlying source query fails (Kusto SEM0100, T-SQL syntax error, missing column, etc.). The error is embedded inside the stream's `PQ Arrow Metadata` section as `{"Error":"..."}` — see [dataflows-authoring-cli § mashup-preview.md → Detecting failures inside the Arrow body](../dataflows-authoring-cli/references/mashup-preview.md#detecting-failures-inside-the-arrow-body) for detector snippets. Naive HTTP-status checks will treat failures as success.
+
+> **Intent split (canonical executeQuery reference is [mashup-preview.md](../dataflows-authoring-cli/references/mashup-preview.md))**: the same `executeQuery` endpoint serves two distinct intents. This skill covers the **consumption** intents:
+> - **(a) Execute a persisted query** — body `{"QueryName":"<saved-shared>"}` only (no `customMashupDocument`).
+> - **(b) Ad-hoc read-only `customMashupDocument`** — preview a candidate `section Section1; ...` document **with no intent to persist** via `updateDefinition` (Example 7).
+>
+> If you intend to **persist** the M, use [`dataflows-authoring-cli` § Workflow C (Preview-Driven Authoring Loop)](../dataflows-authoring-cli/SKILL.md#c-preview-driven-authoring-loop-pre-save-executequery--see-mashup-previewmd) — it adds the bootstrap-bind rule (chicken-and-egg connection binding for new credentialed dataflows), auto-wrap rule, hard-avoid for unbounded preview, and the post-preview persistence steps.
+
+> **Auto-wrap caveat**: The Fabric REST API expects `customMashupDocument` to be a **complete `section Section1; ... shared X = ...;` document**. Raw `let ... in ...` expressions are **not** auto-wrapped server-side — send a full section document and ensure the `QueryName` request field matches a `shared` member declared inside it.
+
+> **Body shape**: send a **flat object** with a top-level `QueryName` (field name is case-insensitive on the wire; PascalCase canonical). The `{"queries":[{...}]}` array shape always returns `400 DataflowExecuteQueryError: Invalid query name` regardless of inner casing. A wrong `QueryName` value returns `QueryNotFound` (different error code). See [dataflows-authoring-cli § mashup-preview.md → Request body](../dataflows-authoring-cli/references/mashup-preview.md#custommashupdocument-format).
+
+> **`TimedOut` recovery for heavy persisted queries**: if the persisted `shared <Q>` member is too expensive for the server-side `executeQuery` budget (~90s observed; surfaces as `400 DataflowExecuteQueryError` → `InternalErrorCode: EvaluationError, Message: Evaluation result error code: TimedOut`), do **not** retry the same body — it is deterministic. Instead, re-issue with `customMashupDocument` set to the full persisted `mashup.pq` (decoded via Example 2) **plus** an appended probe `shared __PreviewCap = Table.FirstN(<Q>, 10);` and `QueryName: "__PreviewCap"`. The cap pushes down for most connectors (Kusto, SQL, OData, web tables) so the source returns only the sample. See [dataflows-authoring-cli § mashup-preview.md → Observed `InternalErrorCode` values](../dataflows-authoring-cli/references/mashup-preview.md#b-non-200-with-errorresponse-json-envelope).
+
+### Prerequisites
+
+- Dataflow must exist (verify via Example 1 above)
+- Query name must exist in the dataflow (verify in mashup.pq via Example 2)
+- User must have **Contributor role or higher** (read+write) on the dataflow
+- **Optional**: Query parameters and custom M code modifications
+
+### Example 5: Execute a Query and Save Results
+
+**Prompt**: "Execute the SalesData query in this dataflow and save the results."
+
+**Agent response**:
+
+```bash
+# Step 1: Identify the query to execute (must be a `shared` member of the dataflow's mashup)
+QUERY_NAME="SalesData"  # Replace with your query name
+
+# Step 2: Build the request body. To execute the persisted query as-is, send ONLY
+#   QueryName — omit customMashupDocument. (Do NOT pass a self-referential
+#   `shared X = let Source = #shared[X] in Source` — that recurses on itself
+#   inside the candidate document.) For custom M, see Example 7.
+jq -n --arg q "$QUERY_NAME" '{QueryName: $q}' > req.json
+
+# Step 3: Execute the query (raw Apache Arrow IPC stream is written directly to disk)
+az rest --method post \
+  --url "https://api.fabric.microsoft.com/v1/workspaces/${WS_ID}/dataflows/${DF_ID}/executeQuery" \
+  --resource "https://api.fabric.microsoft.com" \
+  --body "@req.json" \
+  --output-file "${QUERY_NAME}_results.arrow"
+
+# Step 4: Check for embedded source errors (HTTP 200 does NOT mean success)
+if grep -q '"Error":"' "${QUERY_NAME}_results.arrow"; then
+  echo "Query execution failed (embedded in Arrow body):"
+  python3 -c "import re,sys; raw=open(sys.argv[1],'rb').read().decode('utf-8','replace'); m=re.search(r'\\{\"Error\":\"[^\"]+\"\\}', raw); print(m.group(0) if m else '(marker present, JSON not parsed)')" "${QUERY_NAME}_results.arrow"
+  exit 1
+fi
+
+echo "Query results saved to ${QUERY_NAME}_results.arrow"
+```
+
+> **Why `--output-file`?** Without it, `az rest` dumps raw bytes to stdout and prints the warning `Not a json response, outputting to stdout. For binary data suggest use "--output-file" to write to a file`. Always pass `--output-file` for `executeQuery` so the Arrow IPC stream is captured cleanly. The `jq -r '.data' | base64 --decode` pattern from earlier docs is **incorrect for `az rest`** — there is no JSON envelope to extract.
+
+### Example 5b: Render Query Results as a Markdown Table
+
+**Prompt**: "Show me the first 10 rows of those results."
+
+**Agent response** — read the saved Arrow file and render `head(N)` as a markdown table in chat. **Always do this after `executeQuery`** (default `N=10`). The visual preview catches *silent-success* bugs that the embedded-error detector misses: filter dropped all rows, wrong column referenced, wrong cast, off-by-one filter, join key typo.
+
+```bash
+N=${N:-10}; ARROW_FILE="${QUERY_NAME}_results.arrow"
+python3 - <<EOF
+import json, sys, pyarrow as pa, pyarrow.ipc as ipc
+
+with open("$ARROW_FILE", "rb") as f:
+    try:
+        reader = ipc.open_stream(f)
+    except pa.lib.ArrowInvalid:
+        f.seek(0); reader = ipc.open_file(f)
+    # Surface any embedded engine error before rendering (mirrors mashup-preview.md § Error handling — A)
+    for v in (reader.schema.metadata or {}).values():
+        s = v.decode("utf-8", errors="replace")
+        if '"Error"' in s:
+            try:
+                msg = json.loads(s)["Error"]
+            except (ValueError, KeyError):
+                msg = s[:200]
+            sys.exit(f"Preview failed: {msg}")
+    table = reader.read_all()
+
+rows, cols = table.num_rows, table.num_columns
+print(f"**{rows} rows × {cols} columns** · {', '.join(table.schema.names)}\n")
+if rows == 0:
+    sys.exit(0)
+
+# Slice at the Arrow level before converting — avoids materialising the whole result.
+df = table.slice(0, $N).to_pandas().copy()
+# Truncate long string cells so the chat table stays readable.
+for c in df.select_dtypes(include=["object", "string"]).columns:
+    df[c] = df[c].astype(str).str.slice(0, 50)
+try:
+    print(df.to_markdown(index=False))           # requires the `tabulate` package
+except ImportError:
+    print(df.to_string(index=False))             # fallback: fixed-width text
+EOF
+```
+
+> **Optional dep**: `pandas.DataFrame.to_markdown()` requires the `tabulate` package — install once via your environment's standard Python tooling, the same way you installed `pyarrow` / `pandas` for Example 6. If `tabulate` is absent, the snippet falls back to fixed-width `to_string()` so rendering still works.
+
+> **When to skip rendering**: render `head(N)` by default. Skip only when (a) the user explicitly asked for the raw Arrow file with no preview, (b) the result row count exceeds ~1000 — in that case still render `head(N)` and add a one-line note about the total row count, or (c) the result is being streamed straight into another tool that will consume the Arrow file directly. In every other case, **render** — the saved file alone is not visible to the user in chat.
+
+### Example 6: Convert Arrow Results to CSV
+
+**Prompt**: "Convert my Arrow query results to CSV so I can open them in Excel."
+
+**Agent response**:
+
+> **Prerequisite (one-time client-side setup)**: This example uses `pyarrow` to decode the Arrow IPC stream and `pandas` to write CSV. Install them once via your environment's standard Python tooling. These are local client dependencies, **not** part of the Fabric recipe.
+
+```bash
+python3 <<EOF
+import pyarrow as pa
+import pandas as pd
+import sys
+
+ARROW_FILE = "${QUERY_NAME}_results.arrow"
+CSV_FILE = "${QUERY_NAME}_results.csv"
+
+# Open the Arrow IPC stream directly (raw on the wire, no envelope)
+with open(ARROW_FILE, "rb") as f:
+    reader = pa.ipc.open_stream(f)
+
+    # Defensive: surface any error embedded in the stream's PQ Arrow Metadata
+    md = reader.schema.metadata or {}
+    for k, v in md.items():
+        s = v.decode("utf-8", errors="replace")
+        if '"Error"' in s:
+            print(f"Preview failed: {s}", file=sys.stderr)
+            sys.exit(1)
+
+    table = reader.read_all()
+
+# Convert to pandas and export as CSV
+df = table.to_pandas()
+df.to_csv(CSV_FILE, index=False)
+
+print(f"Converted {len(df)} rows to CSV")
+print("Columns:", list(df.columns))
+EOF
+```
+
+### Example 7: Query with Custom M Code
+
+**Prompt**: "Run a one-off ad-hoc M query against this dataflow without saving it."
+
+> **Intent**: ad-hoc **read-only** execution. The `customMashupDocument` is **not** persisted. If you intend to save the M via `updateDefinition`, use [`dataflows-authoring-cli` § Workflow C](../dataflows-authoring-cli/SKILL.md#c-preview-driven-authoring-loop-pre-save-executequery--see-mashup-previewmd) instead — it adds bootstrap-bind, auto-wrap, and post-preview persistence rules.
+
+**Agent response**:
+
+```bash
+# Execute a query with custom M code (e.g., filter, aggregate, transform).
+# The customMashupDocument must be a complete `section` document; az rest does NOT auto-wrap raw expressions.
+CUSTOM_M='section Section1;
+
+shared CustomQuery = let
+    Source = Table.FromRecords({[id=1, name="Alice"], [id=2, name="Bob"]}),
+    Filtered = Table.SelectRows(Source, each [id] > 0)
+in
+    Filtered;'
+
+jq -n --arg m "$CUSTOM_M" '{QueryName: "CustomQuery", customMashupDocument: $m}' > req.json
+
+az rest --method post \
+  --url "https://api.fabric.microsoft.com/v1/workspaces/${WS_ID}/dataflows/${DF_ID}/executeQuery" \
+  --resource "https://api.fabric.microsoft.com" \
+  --body "@req.json" \
+  --output-file custom_results.arrow
+
+# Always check for embedded errors before treating the file as a success
+if grep -q '"Error":"' custom_results.arrow; then
+    echo "Custom query failed; inspect custom_results.arrow for the embedded {\"Error\":...} block."
+    exit 1
+fi
+```
+
+---
+
+## Output Expectations
+
+When this skill completes a task, the agent should return:
+
+| Field | Convention |
+|---|---|
+| **Verbosity** | Concise summary (3–10 lines) for status; markdown table for list/inspect responses. |
+| **Default format** | Markdown table for `list`-style queries; fenced JSON code block for single-resource responses; raw decoded `mashup.pq` in a fenced ` ```m ` block. For `executeQuery`: save the full Arrow stream to file **and** render `head(N)` (default `N=10`) as a markdown table in chat — see [Example 5b](#example-5b-render-query-results-as-a-markdown-table). Suppress rendering only on explicit user request, when `rows > 1000` (render head + total-count note), or when the result is being streamed into another tool. |
+| **Side-effect disclosure** | This is a **read-only** skill — never imply mutation. |
+| **Verification** | Include the source URL (e.g., the `az rest --url` value) in the response so the user can reproduce the call. |
+| **Error surfacing** | If `executeQuery` returns Arrow with embedded `{"Error":"..."}`, surface the error verbatim and do not present partial results as success. |

@@ -40,7 +40,7 @@ LAKEHOUSE_ID="<lakehouse_id>"
 TOKEN=$(az account get-access-token --resource https://api.fabric.microsoft.com --query accessToken -o tsv)
 
 az rest --method POST \
-  --url "https://api.fabric.microsoft.com/v1/workspaces/${WORKSPACE_ID}/lakehouses/${LAKEHOUSE_ID}/shortcuts" \
+  --url "https://api.fabric.microsoft.com/v1/workspaces/${WORKSPACE_ID}/items/${LAKEHOUSE_ID}/shortcuts" \
   --headers "Authorization=Bearer ${TOKEN}" "Content-Type=application/json" \
   --body '{
     "name": "raw_data",
@@ -49,7 +49,8 @@ az rest --method POST \
       "type": "AdlsGen2",
       "adlsGen2": {
         "location": "https://<storageaccount>.dfs.core.windows.net",
-        "subpath": "/<container>/<folder>"
+        "subpath": "/<container>/<folder>",
+        "connectionId": "<connection-id>"
       }
     }
   }'

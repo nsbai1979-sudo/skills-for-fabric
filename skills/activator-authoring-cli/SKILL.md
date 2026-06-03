@@ -2,13 +2,17 @@
 name: activator-authoring-cli
 description: >
   Create alerts, notifications, and automated actions on Fabric data and events
-  via Fabric REST API and `az rest` CLI. Use when the user wants to:
+  via Fabric REST API and `az rest` CLI. **Invoke this skill** whenever the user
+  wants to:
   (1) create, update, or delete an alert or notification flow,
-  (2) send a Teams message, send an email, or run a Fabric item when something happens,
-  (3) connect alert logic to Eventhouse, Eventstream, Real-time Hub, or Digital Twin Builder / Ontology data,
+  (2) send a Teams message, email, or run a Fabric item when something happens,
+  (3) connect alert logic to Eventhouse, Eventstream, Real-time Hub, or DTB / Ontology data,
   (4) adjust thresholds, filters, event triggers, or actions,
   (5) troubleshoot or change an existing Activator/Reflex definition.
-  Triggers: "create an alert", "notify me when", "let me know when",
+  Invoke this skill **before** asking clarifying questions — clarification is part of this skill, not a preamble to it.
+  Triggers: "create an alert", "create an activator", "create a reflex",
+  "create an activator item", "create an alert item",
+  "notify me when", "let me know when",
   "take action when", "send me an email when", "send a teams message when",
   "run a pipeline when", "update an alert", "delete an alert", "activator rule"
 ---
@@ -194,10 +198,8 @@ Example rule entity:
 
 **Step 6 — Fabric Item Action** (only for `FabricItemInvocation`):
 - Type: `fabricItemAction-v1` — use this standalone action entity whenever the rule invokes a Fabric item such as a Pipeline, Notebook, Spark job definition, Dataflow, or UDF / Function Set
-- See [action-types.md](references/action-types.md) for schema
-- In the rule's `FabricItemBinding`, set `fabricJobConnectionDocumentId` to the standalone `fabricItemAction-v1.uniqueIdentifier`; this is the expected linkage between the binding row and the action entity.
-- For UDF / function-set actions, author the rule binding with `itemType: "UserDataFunctions"`. On later `getDefinition` readback, the standalone `fabricItemAction-v1` entity may surface `payload.fabricItem.itemType: "FunctionSet"` while the embedded `FabricItemBinding` still shows `UserDataFunctions`.
-- For UDF / function-set actions, verify the target item actually exposes a non-empty function list and set `subitemId` to the discovered function name. Parameter names and `parameterType` values must match the discovered Fabric function metadata exactly; omit parameters that are not exposed by the target function. If the target item has no registered functions, the Activator linkage is incomplete and the action should not be treated as valid.
+- In the rule's `FabricItemBinding`, set `fabricJobConnectionDocumentId` to the standalone `fabricItemAction-v1.uniqueIdentifier`
+- See [action-types.md](references/action-types.md) for per-target schemas and UDF-specific gotchas (`itemType` vs readback `FunctionSet`, `subitemId`, canonical `parameterType` mapping, dynamic parameter shape)
 
 ### Entity Wiring Summary
 

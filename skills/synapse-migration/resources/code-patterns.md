@@ -189,6 +189,92 @@ for f in files:
 
 ---
 
+## Spark Catalog API — Unsupported Methods
+
+Several `spark.catalog` methods are **not supported** in Fabric and will throw `AnalysisException`. Replace with Spark SQL equivalents.
+
+> **Safe methods** (no change needed): `spark.catalog.createTable()`, `tableExists()`, `listTables()`, `listColumns()`, `dropTempView()`, `cacheTable()` all work normally in Fabric. Only database-level and function-level methods require refactoring.
+
+### Database Methods
+
+```python
+# ❌ BEFORE — Synapse: list databases
+dbs = spark.catalog.listDatabases()
+for db in dbs:
+    print(db.name)
+
+# ✅ AFTER — Fabric: use Spark SQL
+spark.sql("SHOW DATABASES").show()
+# or collect as list
+dbs = [row.namespace for row in spark.sql("SHOW DATABASES").collect()]
+```
+
+```python
+# ❌ BEFORE — Synapse: get current database
+current = spark.catalog.currentDatabase()
+
+# ✅ AFTER — Fabric: use Spark SQL
+current = spark.sql("SELECT CURRENT_DATABASE()").first()["current_database()"]
+```
+
+```python
+# ❌ BEFORE — Synapse: describe a database
+db_info = spark.catalog.getDatabase("sales_db")
+print(db_info.locationUri)
+
+# ✅ AFTER — Fabric: use DESCRIBE DATABASE
+spark.sql("DESCRIBE DATABASE sales_db").show()
+# For extended info:
+spark.sql("DESCRIBE DATABASE EXTENDED sales_db").show()
+```
+
+### Function Methods
+
+```python
+# ❌ BEFORE — Synapse: list functions
+funcs = spark.catalog.listFunctions()
+
+# ✅ AFTER — Fabric: NOT SUPPORTED — remove or replace
+# If listing built-in functions is needed:
+spark.sql("SHOW FUNCTIONS").show()
+```
+
+```python
+# ❌ BEFORE — Synapse: register function
+spark.catalog.registerFunction("double_it", lambda x: x * 2)
+
+# ✅ AFTER — Fabric: use spark.udf.register()
+from pyspark.sql.types import IntegerType
+spark.udf.register("double_it", lambda x: x * 2, IntegerType())
+```
+
+```python
+# ❌ BEFORE — Synapse: check if function exists
+if spark.catalog.functionExists("double_it"):
+    df = spark.sql("SELECT double_it(value) FROM t")
+
+# ✅ AFTER — Fabric: NOT SUPPORTED — remove check or use try/except
+# Option A: just call it (will fail at runtime if not registered)
+df = spark.sql("SELECT double_it(value) FROM t")
+
+# Option B: search SHOW FUNCTIONS output
+func_exists = len(spark.sql("SHOW USER FUNCTIONS").filter("function = 'double_it'").collect()) > 0
+```
+
+### Quick Reference Table
+
+| Synapse `spark.catalog` Method | Fabric Replacement | Notes |
+|---|---|---|
+| `listDatabases()` | `spark.sql("SHOW DATABASES")` | Returns DataFrame |
+| `currentDatabase()` | `spark.sql("SELECT CURRENT_DATABASE()")` | Returns single-row DataFrame |
+| `getDatabase(name)` | `spark.sql(f"DESCRIBE DATABASE {name}")` | Returns metadata DataFrame |
+| `setCurrentDatabase(name)` | `spark.sql(f"USE {name}")` | Works in both — no change needed |
+| `listFunctions()` | `spark.sql("SHOW FUNCTIONS")` | |
+| `registerFunction(name, fn)` | `spark.udf.register(name, fn, returnType)` | Must specify return type |
+| `functionExists(name)` | `spark.sql("SHOW USER FUNCTIONS").filter(...)` | Manual check |
+
+---
+
 ## Spark Configuration (`%%configure`)
 
 ```python

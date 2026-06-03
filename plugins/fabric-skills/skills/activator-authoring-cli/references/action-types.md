@@ -350,7 +350,13 @@ For Spark Job Definition ActStep bindings, use `itemType: "SparkJobDefinition"`.
 > 2. **Wrong row name** — must be `"FabricItemBinding"` (not `"FabricItemInvocation"` — that's the `kind`)
 > 3. **Multiple rows in ActStep** — ActStep allows exactly ONE action binding row
 
-For `UserDataFunctions` and `FunctionSet`, include a `subitemId` string argument in the binding to name the specific function to execute. Match parameter names and `parameterType` values to the Fabric function metadata exposed by the target item; the provider surfaces metadata values such as `str` and `float` unchanged, so do not invent or normalize them.
+For `UserDataFunctions` and `FunctionSet`, include a `subitemId` string argument in the binding to name the specific function to execute. Match the binding's `parameterName` values to the names exposed by the Fabric function metadata, and use Activator's **canonical `parameterType` values** — `String`, `Number`, or `Boolean` — for each parameter. The Fabric function metadata may surface Python type names such as `str`, `float`, or `int`; do **not** pass those through as `parameterType` on the binding — the rule validator rejects them. Map them to the canonical Activator types instead:
+
+| Fabric function metadata `dataType` | Activator binding `parameterType` |
+|----|----|
+| `str` | `String` |
+| `int`, `float` | `Number` |
+| `bool` | `Boolean` |
 
 > **Recommended authoring pattern:** keep the binding `itemType` as `UserDataFunctions` even if a later readback shows the standalone action entity as `FunctionSet`.
 >
@@ -375,7 +381,7 @@ For dynamic parameter values inside `FabricItemParameter.parameterValue`, use re
           "type": "complex",
           "arguments": [
             { "name": "parameterName", "type": "string", "value": "name" },
-            { "name": "parameterType", "type": "string", "value": "str" },
+            { "name": "parameterType", "type": "string", "value": "String" },
             { "name": "parameterValue", "type": "complexArray", "values": [
                 { "type": "string", "value": "world" }
             ]}
@@ -386,7 +392,7 @@ For dynamic parameter values inside `FabricItemParameter.parameterValue`, use re
           "type": "complex",
           "arguments": [
             { "name": "parameterName", "type": "string", "value": "temperature" },
-            { "name": "parameterType", "type": "string", "value": "float" },
+            { "name": "parameterType", "type": "string", "value": "Number" },
             { "name": "parameterValue", "type": "complexArray", "values": [
                 {
                   "kind": "AttributeReference",
@@ -403,6 +409,25 @@ For dynamic parameter values inside `FabricItemParameter.parameterValue`, use re
   ]
 }
 ```
+
+### Additional gotchas for dynamic `FabricItemParameter` values
+
+The worked UDF binding example above covers the canonical static + dynamic pattern. A few additional gotchas are worth calling out explicitly because they each produced a 400 with a misleading error pointed at the leaf rule rather than the offending field:
+
+#### Envelope contrast — same `AttributeReference`, two shapes
+
+`AttributeReference` appears in several places inside the rule graph, and the envelope differs by location. Reuse the wrong shape and you get a 400. The two shapes you will see in the same definition:
+
+| Where it appears | Envelope |
+|----|----|
+| Inside `ScalarSelectStep` / `DimensionalFilterStep` rows | `{ "kind": "AttributeReference", "type": "complex", "name": "attribute", "arguments": [...] }` |
+| Inside `FabricItemParameter.parameterValue.values` | `{ "kind": "AttributeReference", "type": "complexReference", "arguments": [...] }` (no `name` field) |
+
+For the structured `additionalInformation` form used by Teams / Email actions, see the [TeamsMessage guidance](#teamsmessage-design-guidance) further up — that one uses `type: "complexReference"` with `name: "reference"`, which is yet a different envelope.
+
+#### `AttributeReference.entityId` must point at a `BasicEventAttribute`
+
+Inside `FabricItemParameter.parameterValue`, the `AttributeReference.entityId` must resolve to a `BasicEventAttribute` entity in the same definition. Pointing at an `IdentityPartAttribute` returns `400 Invalid TimeSeriesView payload.` with no hint about the template type. If you want to pass an identity field dynamically, declare a parallel `BasicEventAttribute` over the same source field and reference that.
 
 ### Backend Execution Payload Shapes
 

@@ -87,6 +87,10 @@ Developers use REST APIs to manage artifacts, then protocol-specific connections
 - Authoring skill: `skills/activator-authoring-cli/SKILL.md`
 - Consumption skill: `skills/activator-consumption-cli/SKILL.md`
 
+### Power BI / FabricIQ
+- Consumption skill: `skills/semantic-model-consumption/SKILL.md` — raw DAX queries via MCP ExecuteQuery
+- FabricIQ skill: `skills/fabriciq/SKILL.md` — multi-step Power BI analysis (discover, inspect, resolve, generate, execute)
+
 ### Catalog Search (Item Discovery)
 - Use `POST /v1/catalog/search` to find items across workspaces by name, description, or workspace name
 - Filter by type with `"filter": "Type eq 'Lakehouse'"` syntax
@@ -94,9 +98,10 @@ Developers use REST APIs to manage artifacts, then protocol-specific connections
 - Consumption skill: `skills/search-consumption-cli/SKILL.md`
 
 ### Semantic Models (DAX)
-- Prefer measures over calculated columns
-- Use DIVIDE() for safe division
-- Document complex measures with comments
+- Primary CLI tool: `az rest` against the Fabric REST API
+- Primary MCP tool: `powerbi-modeling-mcp`
+- Authoring skill: `skills/semantic-model-authoring/SKILL.md`
+- Consumption skill: `skills/semantic-model-consumption/SKILL.md`
 
 ### Data Agents
 - Use Python SDK within Fabric notebooks for rapid prototyping

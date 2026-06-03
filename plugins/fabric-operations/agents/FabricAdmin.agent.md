@@ -15,8 +15,8 @@ delegates_to:
 - eventhouse-consumption-cli
 - eventstream-authoring-cli
 - eventstream-consumption-cli
-- powerbi-authoring-cli
-- powerbi-consumption-cli
+- semantic-model-authoring
+- semantic-model-consumption
 - dataflows-authoring-cli
 - dataflows-consumption-cli
 - dataflows-save-as-authoring-cli

@@ -20,7 +20,7 @@
 ### Finding Things in Fabric
 
 1. If workspace AND item are specified:
-   1. Resolve workspace ID by name if needed (see Resolve Workspace Properties by Name)
+   1. Resolve workspace ID by name if needed (see Resolve Workspace Properties)
    2. Resolve item properties within the workspace (see Resolve Item Properties by Name)
 2. If workspace is *not specified*: use the Catalog Search API (see Catalog Search)
 
@@ -174,10 +174,16 @@ GET /v1/workspaces/<workspaceId>/items/<itemId>
 
 Or type-specific: `GET /v1/workspaces/<workspaceId>/warehouses/<warehouseId>`
 
-### Resolve Workspace Properties by Name
+### Resolve Workspace Properties
+
+**Prefer direct ID lookup whenever a workspace UUID is available** (from a prior create response, earlier list result already in context, or explicit user input): call `GET /v1/workspaces/<workspaceId>` directly. Permission-checked direct lookup with no listing or filtering concerns. See [Get Workspace reference](https://learn.microsoft.com/en-us/rest/api/fabric/core/workspaces/get-workspace).
+
+**Resolve by name (only when an ID is not available).** The Fabric REST API has no "get workspace by name" endpoint:
 
 1. Call `GET /v1/workspaces`
 2. Iterate with pagination until `displayName` matches.
+
+> **Filter on `displayName`, not `name`.** The Workspace object exposes `displayName`, not `name` (see [List Workspaces reference](https://learn.microsoft.com/en-us/rest/api/fabric/core/workspaces/list-workspaces)). JMESPath queries on `name` (filter or projection) return empty / nulls and are easily misread as "workspace not found".
 
 ### Resolve Item Properties by Name
 

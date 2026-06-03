@@ -44,9 +44,11 @@ Simple algorithm:
 
 *Don't try to be creative about the APIs, use them exactly as specified — they have implementation limitations.*
 
-### Resolve Workspace Properties by Name
+### Resolve Workspace Properties
 
-To find a workspace's details (including its ID) by name use JMESPath filtering (see also COMMON-CORE.md Resolve Workspace Properties by Name):
+**Prefer direct ID lookup whenever a workspace UUID is available** (from a prior create response, earlier list result already in context, or explicit user input): call `GET /v1/workspaces/$WS_ID`. Permission-checked direct lookup with no listing or filtering concerns.
+
+**Resolve by name (only when an ID is not available).** The Fabric REST API has no "get workspace by name" endpoint, so list+filter is the only path. The Workspace object exposes `displayName`, not `name` (see [List Workspaces reference](https://learn.microsoft.com/en-us/rest/api/fabric/core/workspaces/list-workspaces)) — queries on `name` (filter `value[?name==...]` or projection `value[].{name:name,...}`) return empty / nulls and are easily misread as "workspace not found":
 
 ```bash
 WS_NAME="Marketing"
@@ -56,6 +58,8 @@ az rest --method get \
   --query "value[?displayName=='$WS_NAME'] | [0].id" \
   --output tsv
 ```
+
+Once you have the ID, switch to direct ID lookup for any subsequent calls in the same task.
 
 > **Caution**: This only searches the first page. For tenants with many
 > workspaces, pagination may be needed (see Pagination Pattern section below).

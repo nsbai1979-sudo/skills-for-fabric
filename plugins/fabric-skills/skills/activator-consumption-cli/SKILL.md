@@ -2,15 +2,21 @@
 name: activator-consumption-cli
 description: >
   Inspect existing alerts, notifications, and automated actions in Fabric via
-  read-only REST API calls using `az rest` CLI. Use when the user wants to:
+  read-only REST API calls using `az rest` CLI. **Invoke this skill** whenever
+  the user wants to:
   (1) list existing alerts in a workspace,
   (2) inspect how an alert or notification is configured,
   (3) read and decode an Activator/Reflex definition (ReflexEntities.json),
   (4) list rules, sources, and actions behind an alert,
   (5) understand why an alert fires or what action it takes.
+  **Invoke this skill before answering questions** about an Activator/Reflex item
+  in a Fabric workspace — the listing, lookup, and decoding workflows are part of
+  this skill, not preamble to it.
   Triggers: "show my alerts", "what alerts do I have", "inspect this alert",
   "show me the rule", "show me the action", "show me the source",
-  "get reflex definition", "list activators", "activator details"
+  "get reflex definition", "list activators", "list alerts",
+  "list reflex items", "show activator items", "activator details",
+  "find activator named"
 ---
 
 > **Update Check — ONCE PER SESSION (mandatory)**

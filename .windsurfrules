@@ -69,6 +69,10 @@ rules:
     description: Authoring skill is activator-authoring-cli, consumption skill is activator-consumption-cli
     reference: skills/activator-authoring-cli/SKILL.md
 
+  - name: fabriciq_skills
+    description: Consumption skill is semantic-model-consumption (raw DAX), FabricIQ skill is fabriciq (multi-step Power BI analysis)
+    reference: skills/fabriciq/SKILL.md
+
   - name: catalog_search
     description: Use POST /v1/catalog/search to find items across workspaces by name, description, or type
     reference: skills/search-consumption-cli/SKILL.md
@@ -89,7 +93,12 @@ rules:
   # Architecture
   - name: medallion_architecture
     description: Prefer Bronze/Silver/Gold data organization
-    
+
+  # Semantic Model skills (Power BI)
+  - name: semantic_model_skills
+    description: Authoring skill is semantic-model-authoring, consumption skill is semantic-model-consumption
+    reference: skills/semantic-model-authoring/SKILL.md
+
 best_practices:
   - Use parameterized notebooks and pipelines
   - Implement incremental processing over full refreshes

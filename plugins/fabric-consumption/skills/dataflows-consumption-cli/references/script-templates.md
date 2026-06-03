@@ -112,7 +112,7 @@ az account show >/dev/null 2>&1 || { echo "ERROR: Run 'az login' first."; exit 1
 # --- Get latest job instance ---
 echo "Checking latest job for dataflow $DF_ID..."
 LATEST=$(az rest --method get --resource "https://api.fabric.microsoft.com" \
-  --url "$API/workspaces/$WS_ID/items/$DF_ID/jobs/instances" \
+  --url "$API/workspaces/$WS_ID/dataflows/$DF_ID/jobs/instances" \
   --query "value[0]")
 
 STATUS=$(echo "$LATEST" | jq -r '.status')
@@ -132,7 +132,7 @@ while [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
   ELAPSED=$((ELAPSED + POLL_INTERVAL))
 
   STATUS=$(az rest --method get --resource "https://api.fabric.microsoft.com" \
-    --url "$API/workspaces/$WS_ID/items/$DF_ID/jobs/instances" \
+    --url "$API/workspaces/$WS_ID/dataflows/$DF_ID/jobs/instances" \
     --query "value[0].status" -o tsv)
 
   echo "[${ELAPSED}s] Status: $STATUS"
@@ -141,7 +141,7 @@ while [ "$ELAPSED" -lt "$MAX_WAIT" ]; do
     Completed|Failed|Cancelled)
       echo "✓ Job reached terminal state: $STATUS"
       az rest --method get --resource "https://api.fabric.microsoft.com" \
-        --url "$API/workspaces/$WS_ID/items/$DF_ID/jobs/instances" \
+        --url "$API/workspaces/$WS_ID/dataflows/$DF_ID/jobs/instances" \
         --query "value[0]"
       exit 0
       ;;
@@ -236,6 +236,8 @@ Write-Host "Total: $($allDataflows.Count) dataflow(s)"
 
 ## PowerShell — Definition Decode
 
+> **⚠ LRO caveat:** the `az rest --method post .../getDefinition` call below assumes a synchronous 200 response. The Fabric API may return **202 + Location** (large definitions, server load). For production code, use the `Invoke-WebRequest` LRO branch shown immediately below, or copy the [Fabric LRO Polling Pattern](../../dataflows-authoring-cli/references/authoring-script-templates.md#fabric-lro-polling-pattern) PowerShell branch into your script.
+
 ```powershell
 #Requires -Version 5.1
 param(
@@ -248,10 +250,38 @@ $null = az account show 2>$null
 if ($LASTEXITCODE -ne 0) { Write-Error "Not logged in. Run: az login"; exit 1 }
 
 $API = "https://api.fabric.microsoft.com/v1"
+$resource = "https://api.fabric.microsoft.com"
 New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
 
-$response = az rest --method post --resource "https://api.fabric.microsoft.com" `
-  --url "$API/workspaces/$WorkspaceId/dataflows/$DataflowId/getDefinition" | ConvertFrom-Json
+# getDefinition is an LRO. az rest cannot surface response headers, so use Invoke-WebRequest
+# to capture the 202/Location case, then poll per Fabric LRO contract.
+$token = az account get-access-token --resource $resource --query accessToken -o tsv
+$headers = @{ Authorization = "Bearer $token"; "Content-Length" = "0" }
+try {
+    $resp = Invoke-WebRequest -Method Post -Uri "$API/workspaces/$WorkspaceId/dataflows/$DataflowId/getDefinition" `
+        -Headers $headers -UseBasicParsing
+} catch {
+    Write-Error "getDefinition failed: $($_.Exception.Message)"; exit 1
+}
+if ($resp.StatusCode -eq 202) {
+    $location = $resp.Headers["Location"]
+    if ($location -is [array]) { $location = $location[0] }
+    $retryRaw = $resp.Headers["Retry-After"]
+    if ($retryRaw -is [array]) { $retryRaw = $retryRaw[0] }
+    $retryAfter = 5; [void][int]::TryParse([string]$retryRaw, [ref]$retryAfter)
+    $response = $null
+    while ($null -eq $response) {
+        Start-Sleep -Seconds $retryAfter
+        $op = az rest --method get --resource $resource --url $location | ConvertFrom-Json
+        switch ($op.status) {
+            'Succeeded' { $response = az rest --method get --resource $resource --url "$($location.TrimEnd('/'))/result" | ConvertFrom-Json }
+            'Failed'    { Write-Error "getDefinition failed: $($op.error.message)"; exit 1 }
+            'Cancelled' { Write-Error "getDefinition cancelled"; exit 1 }
+        }
+    }
+} else {
+    $response = $resp.Content | ConvertFrom-Json
+}
 
 foreach ($part in $response.definition.parts) {
     $filename = Split-Path $part.path -Leaf
@@ -277,7 +307,7 @@ if ($LASTEXITCODE -ne 0) { Write-Error "Not logged in. Run: az login"; exit 1 }
 
 $API = "https://api.fabric.microsoft.com/v1"
 $jobs = (az rest --method get --resource "https://api.fabric.microsoft.com" `
-  --url "$API/workspaces/$WorkspaceId/items/$DataflowId/jobs/instances" | ConvertFrom-Json).value
+  --url "$API/workspaces/$WorkspaceId/dataflows/$DataflowId/jobs/instances" | ConvertFrom-Json).value
 
 if (-not $jobs) { Write-Host "No job history found."; exit 0 }
 
@@ -294,4 +324,205 @@ $jobs | ForEach-Object {
 $completed = $jobs | Where-Object { $_.status -eq "Completed" }
 $failed = $jobs | Where-Object { $_.status -eq "Failed" }
 Write-Host "Summary: $($completed.Count) completed, $($failed.Count) failed, $($jobs.Count) total"
+```
+
+
+## Bash — Query Execution and Arrow Conversion
+
+Execute a query and convert Apache Arrow results to CSV:
+
+```bash
+#!/bin/bash
+
+# Configuration
+WORKSPACE_ID="${1:?Usage: $0 <workspace_id> <dataflow_id> <query_name>}"
+DATAFLOW_ID="${2:?Usage: $0 <workspace_id> <dataflow_id> <query_name>}"
+QUERY_NAME="${3:?Usage: $0 <workspace_id> <dataflow_id> <query_name>}"
+
+API="https://api.fabric.microsoft.com/v1"
+AZ="az rest --resource https://api.fabric.microsoft.com"
+
+echo "Executing query: $QUERY_NAME from dataflow: $DATAFLOW_ID"
+
+# Execute the query — raw Apache Arrow IPC stream is captured via --output-file (NOT a JSON envelope).
+# For persisted queries, send QueryName only — omit customMashupDocument.
+ARROW_PATH="${QUERY_NAME}_results.arrow"
+$AZ --method post \
+  --url "$API/workspaces/$WORKSPACE_ID/dataflows/$DATAFLOW_ID/executeQuery" \
+  --body "{\"QueryName\": \"$QUERY_NAME\"}" \
+  --output-file "$ARROW_PATH"
+
+if [ ! -s "$ARROW_PATH" ]; then
+  echo "ERROR: Empty response from executeQuery"
+  exit 1
+fi
+
+# Detect embedded source errors — executeQuery returns HTTP 200 even on Kusto/SQL failures;
+# the error JSON sits inside the stream's PQ Arrow Metadata block.
+if grep -q '"Error":"' "$ARROW_PATH"; then
+  echo "ERROR: Query execution failed (embedded in Arrow body):"
+  python3 -c "import re,sys; raw=open(sys.argv[1],'rb').read().decode('utf-8','replace'); m=re.search(r'\\{\"Error\":\"[^\"]+\"\\}', raw); print(m.group(0) if m else '(error marker present, JSON not parsed)')" "$ARROW_PATH"
+  exit 1
+fi
+
+echo "Arrow data saved to: $ARROW_PATH"
+
+# Convert to CSV if pyarrow is available
+if command -v python3 >/dev/null && python3 -c "import pyarrow, pandas" 2>/dev/null; then
+  python3 << EOF
+import pyarrow as pa
+import pandas as pd
+
+table = pa.ipc.open_stream(open("${QUERY_NAME}_results.arrow", "rb")).read_all()
+df = table.to_pandas()
+df.to_csv("${QUERY_NAME}_results.csv", index=False)
+
+print(f"Converted {len(df)} rows to: ${QUERY_NAME}_results.csv")
+print(f"Columns: {list(df.columns)}")
+EOF
+else
+  echo "Note: Install pyarrow+pandas for automatic CSV conversion: pip install pyarrow pandas"
+fi
+```
+
+## PowerShell — Query Execution and Arrow Conversion
+
+Execute a query and convert Apache Arrow results to CSV:
+
+```powershell
+param(
+    [Parameter(Mandatory)]
+    [string]$WorkspaceId,
+    
+    [Parameter(Mandatory)]
+    [string]$DataflowId,
+    
+    [Parameter(Mandatory)]
+    [string]$QueryName,
+    
+    [string]$CustomMashup = ""
+)
+
+$API = "https://api.fabric.microsoft.com/v1"
+$AZ = "az rest --resource https://api.fabric.microsoft.com"
+
+Write-Host "Executing query: $QueryName from dataflow: $DataflowId"
+
+# Build request body — omit customMashupDocument for persisted queries
+if ($CustomMashup) {
+    $body = @{
+        QueryName = $QueryName
+        customMashupDocument = $CustomMashup
+    } | ConvertTo-Json -Compress
+} else {
+    $body = @{
+        QueryName = $QueryName
+    } | ConvertTo-Json -Compress
+}
+
+$bodyFile = [IO.Path]::GetTempFileName()
+[IO.File]::WriteAllText($bodyFile, $body, [Text.UTF8Encoding]::new($false))
+
+$arrowPath = "${QueryName}_results.arrow"
+
+# Execute the query — raw Apache Arrow IPC stream is captured via --output-file (NOT a JSON envelope).
+try {
+    az rest --method post `
+      --resource "https://api.fabric.microsoft.com" `
+      --url "$API/workspaces/$WorkspaceId/dataflows/$DataflowId/executeQuery" `
+      --body "@$bodyFile" `
+      --output-file $arrowPath
+} catch {
+    Write-Error "Failed to execute query: $_"
+    exit 1
+} finally {
+    Remove-Item $bodyFile -ErrorAction SilentlyContinue
+}
+
+if (-not (Test-Path $arrowPath) -or (Get-Item $arrowPath).Length -eq 0) {
+    Write-Error "Empty response from executeQuery"
+    exit 1
+}
+
+# Detect embedded source errors — executeQuery returns HTTP 200 even on Kusto/SQL failures;
+# the error JSON sits inside the stream's PQ Arrow Metadata block.
+$arrowText = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($arrowPath))
+$embeddedErr = [Regex]::Match($arrowText, '\{"Error":"[^"]+"\}').Value
+if ($embeddedErr) {
+    Write-Error "Query execution failed (embedded in Arrow body): $embeddedErr"
+    exit 1
+}
+
+Write-Host "Arrow data saved to: $arrowPath"
+
+# Convert to CSV if pyarrow is available
+$pythonScript = @"
+import pyarrow as pa
+import pandas as pd
+import sys
+
+try:
+    table = pa.ipc.open_stream(open('$arrowPath', 'rb')).read_all()
+    df = table.to_pandas()
+    df.to_csv('${QueryName}_results.csv', index=False)
+    print(f'Converted {len(df)} rows to: ${QueryName}_results.csv')
+    print(f'Columns: {list(df.columns)}')
+except Exception as e:
+    print(f'Conversion failed: {e}', file=sys.stderr)
+    sys.exit(1)
+"@
+
+$pythonScript | python3
+# Native commands don't throw on non-zero exit — guard on $LASTEXITCODE so a missing
+# pyarrow/pandas (ModuleNotFoundError) or absent python3 surfaces the install hint
+# instead of silently leaving a half-finished conversion.
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Note: Install pyarrow+pandas for automatic CSV conversion: pip install pyarrow pandas"
+}
+```
+
+## Batch Query Execution with Error Handling
+
+Execute multiple queries and collect results:
+
+```bash
+#!/bin/bash
+
+# Configuration
+WORKSPACE_ID="${1:?Usage: $0 <workspace_id> <dataflow_id>}"
+DATAFLOW_ID="${2:?Usage: $0 <workspace_id> <dataflow_id>}"
+QUERIES=("SalesData" "CustomerList" "ProductCatalog")
+
+API="https://api.fabric.microsoft.com/v1"
+AZ="az rest --resource https://api.fabric.microsoft.com"
+
+mkdir -p query_results
+FAILED_QUERIES=()
+
+for QUERY in "${QUERIES[@]}"; do
+    echo "Processing: $QUERY"
+
+    ARROW_PATH="query_results/${QUERY}.arrow"
+    $AZ --method post \
+      --url "$API/workspaces/$WORKSPACE_ID/dataflows/$DATAFLOW_ID/executeQuery" \
+      --body "{\"QueryName\": \"$QUERY\"}" \
+      --output-file "$ARROW_PATH" 2>/dev/null
+
+    # executeQuery returns HTTP 200 even on source-layer failures; the error JSON is embedded
+    # inside the Arrow stream's PQ Arrow Metadata block. Treat absence of "Error":" as success.
+    if [ -s "$ARROW_PATH" ] && ! grep -q '"Error":"' "$ARROW_PATH"; then
+        echo "  ✓ Saved to $ARROW_PATH"
+    else
+        echo "  ✗ Failed"
+        FAILED_QUERIES+=("$QUERY")
+    fi
+done
+
+echo ""
+echo "Summary: $((${#QUERIES[@]} - ${#FAILED_QUERIES[@]}))/${#QUERIES[@]} queries succeeded"
+
+if [ ${#FAILED_QUERIES[@]} -gt 0 ]; then
+    echo "Failed queries: ${FAILED_QUERIES[*]}"
+    exit 1
+fi
 ```

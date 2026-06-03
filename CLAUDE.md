@@ -99,9 +99,12 @@ https://learn.microsoft.com/en-us/rest/api/fabric/articles/
   - Token audience: `https://api.fabric.microsoft.com/.default`
 
 ### Business Intelligence
-- **Semantic Models**: DAX, XMLA, Power BI integration
+- **Semantic Models**: DAX, XMLA, Power BI integration, TMDL
   - Docs: https://learn.microsoft.com/en-us/power-bi/connect-data/service-datasets-understand
-
+  - Authoring skill: `skills/semantic-model-authoring/SKILL.md` — semantic model authoring
+  - Consumption skill: `skills/semantic-model-consumption/SKILL.md` — raw DAX queries against semantic models via MCP ExecuteQuery tool
+  - FabricIQ skill: `skills/fabriciq/SKILL.md` — multi-step Power BI data analysis (discover, inspect, resolve, generate, execute)
+  
 ### Data Science
 - **Data Agents**: Conversational AI over Fabric data sources
   - Docs: https://learn.microsoft.com/en-us/fabric/data-science/concept-data-agent

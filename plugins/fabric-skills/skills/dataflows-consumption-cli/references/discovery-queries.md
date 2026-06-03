@@ -150,7 +150,7 @@ az rest --method post --resource "https://api.fabric.microsoft.com" \
 ```bash
 # Count jobs by status
 az rest --method get --resource "https://api.fabric.microsoft.com" \
-  --url "$API/workspaces/$WS_ID/items/$DF_ID/jobs/instances" | \
+  --url "$API/workspaces/$WS_ID/dataflows/$DF_ID/jobs/instances" | \
   jq '[.value[] | .status] | group_by(.) | map({status: .[0], count: length})'
 ```
 
@@ -159,7 +159,7 @@ az rest --method get --resource "https://api.fabric.microsoft.com" \
 ```bash
 # Average duration of completed jobs (in seconds)
 az rest --method get --resource "https://api.fabric.microsoft.com" \
-  --url "$API/workspaces/$WS_ID/items/$DF_ID/jobs/instances" | \
+  --url "$API/workspaces/$WS_ID/dataflows/$DF_ID/jobs/instances" | \
   jq '[.value[] | select(.status=="Completed" and .endTimeUtc != null) |
     (((.endTimeUtc | fromdateiso8601) - (.startTimeUtc | fromdateiso8601)))] |
     if length > 0 then (add / length | round) else 0 end' | \
@@ -171,6 +171,6 @@ az rest --method get --resource "https://api.fabric.microsoft.com" \
 ```bash
 # List all failures with reasons
 az rest --method get --resource "https://api.fabric.microsoft.com" \
-  --url "$API/workspaces/$WS_ID/items/$DF_ID/jobs/instances" | \
+  --url "$API/workspaces/$WS_ID/dataflows/$DF_ID/jobs/instances" | \
   jq -r '.value[] | select(.status=="Failed") | "\(.startTimeUtc) | \(.failureReason // "unknown")"'
 ```

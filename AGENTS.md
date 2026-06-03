@@ -48,7 +48,7 @@ Fabric REST APIs: https://learn.microsoft.com/en-us/rest/api/fabric/articles/
 - Power Query M for Dataflows Gen2 transformations (see `dataflows-authoring-cli` and `dataflows-consumption-cli` skills)
 - Eventstream for real-time event ingestion (graph-based topology with sources, operators, destinations)
 - Activator for Reflex alerts, notifications, and automated actions over Fabric events and data
-- DAX for Semantic Model measures
+- Semantic model development (see `semantic-model-authoring`)
 - Spark operations skill: `skills/spark-operations-cli/SKILL.md` — read-only triage for failed jobs, stuck sessions, performance bottlenecks
 
 ### Operations
@@ -60,6 +60,10 @@ Fabric REST APIs: https://learn.microsoft.com/en-us/rest/api/fabric/articles/
 ### Activator / Reflex
 - Authoring skill: `skills/activator-authoring-cli/SKILL.md` — create Activator items, sources, rules, conditions, and actions
 - Consumption skill: `skills/activator-consumption-cli/SKILL.md` — inspect Activator definitions, rules, sources, and actions
+
+### Power BI / FabricIQ
+- Consumption skill: `skills/semantic-model-consumption/SKILL.md` — raw DAX queries against semantic models via MCP ExecuteQuery tool
+- FabricIQ skill: `skills/fabriciq/SKILL.md` — multi-step Power BI data analysis (discover, inspect, resolve, generate, execute)
 
 ## Constraints
 
