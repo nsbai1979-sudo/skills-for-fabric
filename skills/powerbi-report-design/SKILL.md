@@ -9,7 +9,7 @@ description: >-
   `powerbi-report-authoring`. For end-to-end requirements, approval, and build
   sequencing, use `powerbi-report-planning`. Triggers: "design Power BI report",
   "make dashboard look professional", "choose chart type", "apply brand to
-  report", "redesign report", "create design brief".
+  report", "redesign report", "create design brief", "Power BI report design archetype".
 metadata:
   version: 0.1.0
 ---

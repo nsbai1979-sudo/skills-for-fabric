@@ -1,6 +1,6 @@
 ---
 name: powerbi-report-management
-description: "Manage Power BI report workspace items in Microsoft Fabric via `az rest` CLI against the Fabric REST API. Use when the user wants to: (1) create reports from PBIR definitions, (2) get or download report definitions, (3) update report definitions or properties, (4) list workspace reports, (5) delete reports. For report layout authoring (pages, visuals, filters, formatting), use `powerbi-report-authoring`. Triggers: upload Power BI report, download PBIR definition, publish Power BI report to Fabric, manage Power BI reports."
+description: "Manage Power BI report workspace items and PBIR definitions in Microsoft Fabric via `az rest` CLI against the Fabric REST API. Use when the user wants to: (1) upload or publish a PBIR/report definition to Fabric, (2) get or download report definitions, (3) update report item definitions or properties, (4) list workspace reports, (5) delete reports. For editing PBIR files, pages, visuals, filters, themes, or formatting, use `powerbi-report-authoring`. For business questions over report data, use `fabriciq`. Triggers: upload PBIR report definition, upload Power BI report, download PBIR definition, publish PBIR definition, publish Power BI report to Fabric, manage Power BI reports, list workspace reports."
 metadata:
   version: 0.1.0
 ---

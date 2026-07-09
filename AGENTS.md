@@ -58,6 +58,7 @@ Fabric REST APIs: https://learn.microsoft.com/en-us/rest/api/fabric/articles/
 ### Development
 - PySpark with mssparkutils for notebooks
 - T-SQL with surface area limitations for Warehouse
+- SQL Database in Fabric (OLTP): T-SQL DDL/DML, read-only queries, and performance diagnostics (see `sqldb-authoring-cli`, `sqldb-consumption-cli`, `sqldb-operations-cli` skills)
 - KQL for real-time analytics (always use time filters)
 - Power Query M for Dataflows Gen2 transformations (see `dataflows-authoring-cli` and `dataflows-consumption-cli` skills)
 - Eventstream for real-time event ingestion (graph-based topology with sources, operators, destinations)

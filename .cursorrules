@@ -45,6 +45,13 @@ Developers use REST APIs to manage artifacts, then protocol-specific connections
 - Consumption skill: `skills/sqldw-consumption-cli/SKILL.md`
 - Operations skill: `skills/sqldw-operations-cli/SKILL.md`
 
+### SQL Database (in Fabric, OLTP)
+- OLTP database with an enforced T-SQL surface (PK/FK/constraints), Query Store, and DMVs - distinct from the Warehouse
+- Connect over TDS with `sqlcmd` to the SQL database (read-write) endpoint, not the SQL analytics endpoint, for authoring and diagnostics
+- Authoring skill: `skills/sqldb-authoring-cli/SKILL.md`
+- Consumption skill: `skills/sqldb-consumption-cli/SKILL.md`
+- Operations skill: `skills/sqldb-operations-cli/SKILL.md`
+
 ### Notebooks
 - Tag first cell as "parameters" for parameterized notebooks
 - Use mssparkutils.credentials.getSecret() for secrets

@@ -2,7 +2,7 @@
   "name": "fabric-collection",
   "metadata": {
     "description": "Microsoft Skills for Fabric collection for GitHub Copilot CLI",
-    "version": "0.3.6"
+    "version": "0.3.7"
   },
   "owner": {
     "name": "Microsoft",
@@ -13,7 +13,7 @@
       "name": "fabric-skills",
       "source": "./plugins/fabric-skills",
       "description": "Complete bundle: all Microsoft Skills for Fabric for developers and consumers",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "skills": [
         "./skills/check-updates",
         "./skills/semantic-model-consumption",
@@ -30,6 +30,9 @@
         "./skills/activator-consumption-cli",
         "./skills/activator-authoring-cli",
         "./skills/sqldw-operations-cli",
+        "./skills/sqldb-authoring-cli",
+        "./skills/sqldb-consumption-cli",
+        "./skills/sqldb-operations-cli",
         "./skills/spark-operations-cli",
         "./skills/mlv-operations-cli",
         "./skills/dataflows-consumption-cli",
@@ -65,6 +68,7 @@
         "microsoft-fabric",
         "medallion",
         "data-warehouse",
+        "sqldatabase",
         "lakehouse",
         "analytics",
         "kql",
@@ -78,7 +82,7 @@
       "name": "skills-for-fabric",
       "source": "./plugins/fabric-skills",
       "description": "[DEPRECATED ALIAS of fabric-skills@fabric-collection \u2014 pre-0.3.0 users only; new installs should use fabric-skills.] Complete bundle: all Microsoft Skills for Fabric for developers and consumers",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "skills": [
         "./skills/check-updates",
         "./skills/semantic-model-consumption",
@@ -95,6 +99,9 @@
         "./skills/activator-consumption-cli",
         "./skills/activator-authoring-cli",
         "./skills/sqldw-operations-cli",
+        "./skills/sqldb-authoring-cli",
+        "./skills/sqldb-consumption-cli",
+        "./skills/sqldb-operations-cli",
         "./skills/spark-operations-cli",
         "./skills/mlv-operations-cli",
         "./skills/dataflows-consumption-cli",
@@ -130,6 +137,7 @@
         "microsoft-fabric",
         "medallion",
         "data-warehouse",
+        "sqldatabase",
         "lakehouse",
         "analytics",
         "kql",
@@ -143,10 +151,11 @@
       "name": "fabric-authoring",
       "source": "./plugins/fabric-authoring",
       "description": "Developer skills for authoring Microsoft Skills for Fabric solutions - SDKs, APIs, automation scripts, CI/CD",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "skills": [
         "./skills/check-updates",
         "./skills/sqldw-authoring-cli",
+        "./skills/sqldb-authoring-cli",
         "./skills/spark-authoring-cli",
         "./skills/eventhouse-authoring-cli",
         "./skills/eventstream-authoring-cli",
@@ -179,12 +188,13 @@
       "name": "fabric-consumption",
       "source": "./plugins/fabric-consumption",
       "description": "Consumer skills for interactive Microsoft Skills for Fabric operations - queries, exploration, monitoring",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "skills": [
         "./skills/check-updates",
         "./skills/semantic-model-consumption",
         "./skills/fabriciq",
         "./skills/sqldw-consumption-cli",
+        "./skills/sqldb-consumption-cli",
         "./skills/spark-consumption-cli",
         "./skills/eventhouse-consumption-cli",
         "./skills/eventstream-consumption-cli",
@@ -222,11 +232,12 @@
       "name": "fabric-operations",
       "source": "./plugins/fabric-operations",
       "description": "Operations skills for diagnosing Microsoft Fabric performance and health - system views, multi-step investigation workflows",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "skills": [
         "./skills/check-updates",
         "./skills/mlv-operations-cli",
         "./skills/sqldw-operations-cli",
+        "./skills/sqldb-operations-cli",
         "./skills/spark-operations-cli"
       ],
       "agents": [
@@ -250,7 +261,7 @@
       "name": "powerbi-authoring",
       "source": "./plugins/powerbi-authoring",
       "description": "Developer skills for authoring Microsoft Power BI solutions.",
-      "version": "0.3.6",
+      "version": "0.3.7",
       "skills": [
         "./skills/check-updates",
         "./skills/semantic-model-authoring",

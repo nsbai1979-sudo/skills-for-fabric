@@ -66,6 +66,13 @@ https://learn.microsoft.com/en-us/rest/api/fabric/articles/
   - Consumption skill: `skills/sqldw-consumption-cli/SKILL.md` — read-only T-SQL queries
   - Operations skill: `skills/sqldw-operations-cli/SKILL.md` — performance diagnostics, slow queries, query insights
 
+### SQL Database (in Fabric)
+- **SQL database**: OLTP database with an enforced T-SQL surface, Query Store, and DMVs (distinct from the Warehouse)
+  - Docs: https://learn.microsoft.com/en-us/fabric/database/sql/overview
+  - Authoring skill: `skills/sqldb-authoring-cli/SKILL.md` — DDL/DML, constraints, indexes, source control, SqlPackage deploy, GraphQL
+  - Consumption skill: `skills/sqldb-consumption-cli/SKILL.md` — read-only T-SQL exploration, vector similarity, JSON, temporal queries
+  - Operations skill: `skills/sqldb-operations-cli/SKILL.md` — performance diagnostics via Query Store, DMVs, Extended Events
+
 ### Data Integration
 - **Pipelines**: Orchestration and data movement
   - Docs: https://learn.microsoft.com/en-us/fabric/data-factory/data-factory-overview
