@@ -4,6 +4,22 @@ User-facing changes for the public Microsoft Fabric Skills release.
 
 ## [Unreleased]
 
+## [0.3.7] - 2026-07-09
+
+### Added
+- **`skills/sqldb-authoring-cli/SKILL.md`, `skills/sqldb-consumption-cli/SKILL.md`, `skills/sqldb-operations-cli/SKILL.md`** -- new SQL Database in Fabric skills (authoring, read-only consumption, and performance/diagnostics) plus Vally + full-eval coverage.
+
+### Changed
+- **`skills/powerbi-report-authoring`**, **`skills/powerbi-report-design`**, **`skills/powerbi-report-management`**, **`skills/powerbi-report-planning`** -- synced the latest guidance from the source repo (routing-neutral; no frontmatter/trigger/version changes): `cardVisual` vs. legacy `multiRowCard` anti-patterns and multi-value card guidance, `catalog describe` role-name verification (`Data` vs. legacy `Fields`), CLI `@latest` install/update guidance, PBIR `.platform`/`version.json`/`pages.json` scaffolding clarifications, conditional-formatting data-bars and single-hue gradient guidance, `fontColor` vs. `fontColorPrimary` handling, Desktop unsaved-changes pre-reload check, slicer tooltip `visualTooltip.show` requirement, and cartesian/non-cartesian per-series color guidance.
+- **`skills/dataflows-authoring-cli`** -- treats a terminal, non-retriable Dataflow Gen2 refresh outcome as a stop condition instead of a debugging loop: a refresh/LRO job reaching terminal `Failed`/`Cancelled`, a backend error with `isRetriable: false`, or a workspace-wide `UnknownException` now surfaces the raw `failureReason` and ends. Refresh-failure isolation is bounded to a single `executeQuery` attempt. The refresh-poll examples (bash + PowerShell) poll a bounded loop over the known terminal set (`Completed`/`Failed`/`Cancelled`/`Deduped`), treat `Deduped` as concurrency (another refresh already running) rather than a failure, and surface `.failureReason` on `Failed`/`Cancelled`.
+
+### Fixed
+- **`skills/powerbi-report-authoring`** -- schema-version guidance no longer points at the unpublished `visualContainer/2.10.0` schema (which returns 404 on live `$schema` validation); it now copies `$schema` from an existing `visual.json` and otherwise falls back to the published `2.9.0`. Fixes microsoft/skills-for-fabric#55.
+- **`skills/powerbi-report-authoring`** -- map fallback guidance uses the valid `clusteredBarChart` visual type (was the invalid `barChartClustered`) and no longer mislabels `shapeMap` as a legacy visual (only `map`/`filledMap` are legacy Bing Maps visuals; verified via `powerbi-report-author validate`).
+- **`skills/powerbi-report-design`** -- accessibility target-size criterion corrected from WCAG 2.5.5 (Target Size Enhanced, AAA, ≥44px) to 2.5.8 (Target Size Minimum, AA, ≥24px), and contrast-ratio examples corrected. Fixes microsoft/skills-for-fabric#43.
+- **`skills/powerbi-report-authoring`** -- `version.json` scaffolding guidance now stresses preserving the full scaffolded file including `$schema`, avoiding the local-validate-passes-but-Fabric-`updateDefinition`-rejects mismatch. Relates to microsoft/skills-for-fabric#35.
+- **`skills/activator-authoring-cli`** -- when a requested alert or rule targets a signal that no discoverable source in the workspace exposes, the skill now stops and asks which source and fields provide it instead of creating a Reflex or modifying an unrelated existing item to force-fit the request.
+
 ## [0.3.6] - 2026-07-02
 
 ### Added
@@ -22,12 +38,13 @@ User-facing changes for the public Microsoft Fabric Skills release.
 ## [0.3.5] - 2026-06-25
 
 ### Added
-- **New skills `fabriciq-ontology-authoring-cli` and `fabriciq-ontology-consumption-cli`** — Fabric IQ Ontology (preview) support from the CLI. `fabriciq-ontology-authoring-cli` creates and evolves Ontology items (entity types, properties incl. timeseries, relationship types, and bindings to OneLake lakehouse or Eventhouse / KQL tables) via the Fabric item-definition REST API with a mandatory Preview & Confirm gate before any LRO write. `fabriciq-ontology-consumption-cli` reads Ontology items to produce agent grounding context and routes ontology-backed data queries by binding type to the matching per-datasource consumption skill (`eventhouse-consumption-cli`, `spark-consumption-cli`, `sqldw-consumption-cli`). Adds per-skill `references/` (including a shared ontology schema reference bundled into each skill), routing tests and full-eval plans.
+- **New skills `fabriciq-ontology-authoring-cli` and `fabriciq-ontology-consumption-cli`** — Fabric IQ Ontology (preview) support from the CLI. `fabriciq-ontology-authoring-cli` creates and evolves Ontology items (entity types, properties incl. timeseries, relationship types, and bindings to OneLake lakehouse or Eventhouse / KQL tables) via the Fabric item-definition REST API with a mandatory Preview & Confirm gate before any LRO write. `fabriciq-ontology-consumption-cli` reads Ontology items to produce agent grounding context and routes ontology-backed data queries by binding type to the matching per-datasource consumption skill (`eventhouse-consumption-cli`, `spark-consumption-cli`, `sqldw-consumption-cli`). Adds per-skill `references/` (including a shared ontology schema reference bundled into each skill), routing tests, Vally integration evals, and full-eval plans.
 - **New skill: `mlv-operations-cli`** -- Manage Materialized Lake View (MLV) refresh schedules and job execution via Fabric REST APIs. Provides scheduling and monitoring operations (9 endpoints):
   - **Schedule Management**: Create/list/update/delete refresh schedules (Cron, Daily, Weekly, Monthly)
   - **Job Execution**: Trigger on-demand refreshes, monitor job status/history, cancel running jobs
   - **UX Patterns**: Human-in-the-loop confirmations, step-by-step planning, iterative error handling
   - **Gap Documentation**: Transparently documents MLV discovery limitations — user must provide lakehouse ID and table names manually
+- **Vally integration tests** -- 5 eval scenarios (2 with L1+L2 program verifiers, 3 with L0 output assertions + l1l2_exempt for error/edge cases)
 - **Cross-skill integration** -- Routing from spark-authoring-cli, spark-operations-cli, FabricDataEngineer agent delegation
 - **Competitive advantage** -- Fabric is first platform to offer conversational MLV scheduling (Databricks Lakeflow has no equivalent)
 

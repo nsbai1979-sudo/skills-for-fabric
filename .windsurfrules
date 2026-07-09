@@ -117,7 +117,12 @@ rules:
   - name: sqldw_skills
     description: Authoring skill is sqldw-authoring-cli, consumption skill is sqldw-consumption-cli, operations skill is sqldw-operations-cli
     reference: skills/sqldw-operations-cli/SKILL.md
-    
+
+  # SQL Database (in Fabric) Operations
+  - name: sqldb_skills
+    description: Authoring skill is sqldb-authoring-cli, consumption skill is sqldb-consumption-cli, operations skill is sqldb-operations-cli
+    reference: skills/sqldb-operations-cli/SKILL.md
+
   # Security
   - name: no_hardcoded_secrets
     description: Never hardcode credentials - use Key Vault or environment variables
